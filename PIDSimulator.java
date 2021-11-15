@@ -8,14 +8,16 @@ import PIDMethods;
 @SuppressWarnings("serial")
 public class PIDSimulator extends JPanel {
 //Constants------------------------------------------------------------------------------------------------------------------------------------------
-    static final int timeStep = 10;
-    static final double length = 500;
-    static final int width = 1500;
+    static final int timeStep = 20;         //simulation time step (milliseconds)
+    static final double length = 0.25;      //length of pendulum arm  (meters)
+    static final double PendMass=1;         //mass of weight at bottom of pendulum (kg)
+    static final int width = 1500;      
     static final int height = 700;
-    static final int pivotX = width/2;
+    static final int pivotX = width/2;  
     static final int pivotY = 100;
-    static final double friction = 0.001;
+    static final double friction = 0.1;   //friction torque of pendulum pivot point (Nm)
     static final double rotation = Math.PI*2;
+    static final double gravity = 9.81;     //gravitational constant (9.81 m/s2)
 
     static final DrawingManager panel = new DrawingManager();
     static final Font font = new Font("Serif", Font.PLAIN, 20);
@@ -25,16 +27,25 @@ public class PIDSimulator extends JPanel {
     static double pGain = 0;
     static double iGain = 0;
     static double dGain = 0;
+    static double TargetAngle = Math.toRadians(-45);
+    static double pCommand = 0;
+    static double iCommand = 0;
+    static double dCommand = 0;
+    static double AngleError = 0;
+    static double IntError = 0;
+    static double PreviousError = 0;
+    static double Tgravity=0;
+    static double Tfriction=0;
 
     static long time = System.currentTimeMillis();
-    static double gravity = 50;
-    static double angle = Math.toRadians(90);
-    static float motorMax = 5;
-    static float motorOut = 0;
+
+    static double angle = Math.toRadians(45);
+    static double motorMax = 5;
+    static double motorOut = 0;
     static double velocity = 0;
     static double acceleration = 0;
-    static int pendulumX = (int)Math.round(pivotX+Math.sin(angle)*length);
-    static int pendulumY = (int)Math.round(pivotY+Math.cos(angle)*length);
+    static int pendulumX = (int)Math.round(pivotX+Math.sin(angle)*length*2000);
+    static int pendulumY = (int)Math.round(pivotY+Math.cos(angle)*length*2000);
 
     public static void main(String[] args) {
     //Frame Setup------------------------------------------------------------------------------------------------------------------------------------
@@ -99,6 +110,7 @@ public class PIDSimulator extends JPanel {
                     angle = Math.toRadians(Double.parseDouble(rAngle.getText()));
                     velocity = 0;
                     acceleration = 0;
+                    IntError=0;
                 } catch (NumberFormatException value) {
                     System.out.println("Invalid Entry");
                 }
@@ -110,6 +122,7 @@ public class PIDSimulator extends JPanel {
         time = System.currentTimeMillis();
         Timer timer = new Timer(timeStep, new ActionListener() {
             public void actionPerformed(ActionEvent evt) {
+                PIDCalc();
                 Physics();
                 frame.repaint();
             }
@@ -117,20 +130,37 @@ public class PIDSimulator extends JPanel {
         timer.start();  
     }
 
+//PID Calculation of Motor Torque--------------------------------------------------------------------------------------------------------------------------------------------
+    static void PIDCalc () {
+        AngleError=TargetAngle-angle;                       //calc angle error (target angle-current angle)
+        pCommand = pGain * AngleError;                      //calculate Proportional command
+        dCommand = dGain * (AngleError - PreviousError)/((double)timeStep/1000);    //calculate Derivative command
+        if(Math.abs(motorOut)<motorMax){
+            IntError=IntError+AngleError;}                  //Accumulate the error if motor is not at its max value already
+        iCommand = iGain * IntError;                        //calculate the Integral command
+        //iCommand = Math.min(motorMax, iCommand);            //limit intergral torque command to limit of motor 
+        //iCommand = Math.max(-motorMax, iCommand);           //      to prevent it from endlessly accumulating
+        motorOut = pCommand + dCommand + iCommand;          //sum P I and D terms into full command
+        motorOut = Math.min(motorMax, motorOut);            //limit motor torque command to 
+        motorOut = Math.max(-motorMax, motorOut);           //     the capability of the motor
+        PreviousError=AngleError;
+
+}
+
+
 //Physics--------------------------------------------------------------------------------------------------------------------------------------------
     static void Physics () {
-        acceleration = (Math.sin(angle)*-gravity)/length;
-        motorOut = Math.min(motorMax, motorOut);
-        acceleration += motorOut;
+        
+        Tgravity = (PendMass*gravity*length*Math.sin(angle));    //Torque on pivot due to gravity pulling down on weight
+        Tfriction = friction*Math.signum(velocity);             //Torque on pivot due to friction (always opposes velocity)
+        acceleration = (motorOut-Tgravity-Tfriction)/(PendMass*length*length);  // angular accel = total torque/(mass*length^2) 
+        velocity += acceleration*timeStep/1000;                      //change in velocity is acceleration * time step
+        angle += velocity*timeStep/1000;
+        //if(angle > rotation){angle -= rotation;}
+        //if(angle < -rotation){angle += rotation;}
 
-        velocity += acceleration;
-        velocity = velocity*(1-friction);
-        angle += Math.toRadians(velocity);
-        if(angle > rotation){angle -= rotation;}
-        if(angle < -rotation){angle += rotation;}
-
-        pendulumX = (int)Math.round(pivotX+Math.sin(angle)*length);
-        pendulumY = (int)Math.round(pivotY+Math.cos(angle)*length);
+        pendulumX = (int)Math.round(pivotX+Math.sin(angle)*length*2000);
+        pendulumY = (int)Math.round(pivotY+Math.cos(angle)*length*2000);
     }
 
 //Drawing--------------------------------------------------------------------------------------------------------------------------------------------
