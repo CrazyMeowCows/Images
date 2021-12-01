@@ -3,7 +3,6 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import java.io.IOException;
-import PIDMethods;
 
 @SuppressWarnings("serial")
 public class PIDSimulator extends JPanel {
@@ -11,8 +10,10 @@ public class PIDSimulator extends JPanel {
     static final int timeStep = 20;         //simulation time step (milliseconds)
     static final double length = 0.25;      //length of pendulum arm  (meters)
     static final double PendMass=1;         //mass of weight at bottom of pendulum (kg)
-    static final int width = 1500;      
-    static final int height = 700;
+    static final int metersToPixel = 2000;  //value determines pixel length of the pendulum
+    static final GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+    static final int width = gd.getDisplayMode().getWidth()-100;
+    static final int height = gd.getDisplayMode().getHeight()-100;
     static final int pivotX = width/2;  
     static final int pivotY = 100;
     static final double friction = 0.1;   //friction torque of pendulum pivot point (Nm)
@@ -46,6 +47,8 @@ public class PIDSimulator extends JPanel {
     static double acceleration = 0;
     static int pendulumX = (int)Math.round(pivotX+Math.sin(angle)*length*2000);
     static int pendulumY = (int)Math.round(pivotY+Math.cos(angle)*length*2000);
+    static int TargetX = (int)Math.round(pivotX+Math.sin(TargetAngle)*length*1500);
+    static int TargetY = (int)Math.round(pivotY+Math.cos(TargetAngle)*length*1500);
 
     public static void main(String[] args) {
     //Frame Setup------------------------------------------------------------------------------------------------------------------------------------
@@ -57,14 +60,16 @@ public class PIDSimulator extends JPanel {
         PIDMethods.label("P Gain: ", 10, 5);
         PIDMethods.label("I Gain: ", 10, 35);
         PIDMethods.label("D Gain: ", 10, 65);
-        PIDMethods.label("Reset ∡: ", 10, 125);
-        PIDMethods.label("Max Pwr: ", 10, 155);
+        PIDMethods.label("Target ∡: ", 10, 95);
+        PIDMethods.label("Reset ∡: ", 10, 225);
+        PIDMethods.label("Max Pwr: ", 10, 255);
         
         JTextField pText = PIDMethods.text("0", 100, 5);
         JTextField iText = PIDMethods.text("0", 100, 35);
         JTextField dText = PIDMethods.text("0", 100, 65);
-        JTextField rAngle = PIDMethods.text("" + Math.round(Math.toDegrees(angle)), 100, 125);
-        JTextField maxPwr = PIDMethods.text("" + Math.round(motorMax), 100, 155);
+        JTextField TAtext = PIDMethods.text("" + Math.toDegrees(TargetAngle), 100, 95);
+        JTextField rAngle = PIDMethods.text("" + Math.round(Math.toDegrees(angle)), 100, 225);
+        JTextField maxPwr = PIDMethods.text("" + Math.round(motorMax), 100, 255);
 
         JButton reset = PIDMethods.button("Reset To Start Angle", width/2, 30, 300, 50);
 
@@ -84,6 +89,9 @@ public class PIDSimulator extends JPanel {
                     pGain = Double.parseDouble(pText.getText());
                     iGain = Double.parseDouble(iText.getText());
                     dGain = Double.parseDouble(dText.getText());
+                    TargetAngle = Math.toRadians(Double.parseDouble(TAtext.getText()));
+                    motorMax = Double.parseDouble(maxPwr.getText());
+                    
                 } catch (NumberFormatException value) {
                     System.out.println("Invalid Entry");
                 }
@@ -92,17 +100,8 @@ public class PIDSimulator extends JPanel {
         pText.addActionListener(pidInputs);
         iText.addActionListener(pidInputs);
         dText.addActionListener(pidInputs);
-
-        Action maxInput = new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                try {
-                    motorMax = Float.parseFloat(maxPwr.getText());
-                } catch (NumberFormatException value) {
-                    System.out.println("Invalid Entry");
-                }
-            }
-        };
-        maxPwr.addActionListener(maxInput);
+        TAtext.addActionListener(pidInputs);
+        maxPwr.addActionListener(pidInputs);
 
         Action clicked = new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
@@ -135,32 +134,28 @@ public class PIDSimulator extends JPanel {
         AngleError=TargetAngle-angle;                       //calc angle error (target angle-current angle)
         pCommand = pGain * AngleError;                      //calculate Proportional command
         dCommand = dGain * (AngleError - PreviousError)/((double)timeStep/1000);    //calculate Derivative command
-        if(Math.abs(motorOut)<motorMax){
-            IntError=IntError+AngleError;}                  //Accumulate the error if motor is not at its max value already
+        if(Math.abs(motorOut)<motorMax){IntError=IntError+AngleError;}              //Accumulate the error if motor is not at its max value (anti-windup)
         iCommand = iGain * IntError;                        //calculate the Integral command
-        //iCommand = Math.min(motorMax, iCommand);            //limit intergral torque command to limit of motor 
-        //iCommand = Math.max(-motorMax, iCommand);           //      to prevent it from endlessly accumulating
+        iCommand = Math.min(motorMax, iCommand);            //limit intergral torque command to limit of motor 
+        iCommand = Math.max(-motorMax, iCommand);           //      to prevent it from endlessly accumulating
         motorOut = pCommand + dCommand + iCommand;          //sum P I and D terms into full command
         motorOut = Math.min(motorMax, motorOut);            //limit motor torque command to 
         motorOut = Math.max(-motorMax, motorOut);           //     the capability of the motor
-        PreviousError=AngleError;
-
+        PreviousError=AngleError;                           //Put current angle error into previous error for next cycle
 }
-
 
 //Physics--------------------------------------------------------------------------------------------------------------------------------------------
     static void Physics () {
-        
-        Tgravity = (PendMass*gravity*length*Math.sin(angle));    //Torque on pivot due to gravity pulling down on weight
-        Tfriction = friction*Math.signum(velocity);             //Torque on pivot due to friction (always opposes velocity)
+        Tgravity = (PendMass*gravity*length*Math.sin(angle));         //Torque on pivot due to gravity pulling down on weight
+        Tfriction = friction*Math.signum(velocity);                   //Torque on pivot due to friction (always opposes velocity)
         acceleration = (motorOut-Tgravity-Tfriction)/(PendMass*length*length);  // angular accel = total torque/(mass*length^2) 
-        velocity += acceleration*timeStep/1000;                      //change in velocity is acceleration * time step
+        velocity += acceleration*timeStep/1000;                       //change in velocity is acceleration * time step
         angle += velocity*timeStep/1000;
-        //if(angle > rotation){angle -= rotation;}
-        //if(angle < -rotation){angle += rotation;}
 
-        pendulumX = (int)Math.round(pivotX+Math.sin(angle)*length*2000);
-        pendulumY = (int)Math.round(pivotY+Math.cos(angle)*length*2000);
+        pendulumX = (int)Math.round(pivotX+Math.sin(angle)*length*metersToPixel);
+        pendulumY = (int)Math.round(pivotY+Math.cos(angle)*length*metersToPixel);
+        TargetX = (int)Math.round(pivotX+Math.sin(TargetAngle)*length*metersToPixel);
+        TargetY = (int)Math.round(pivotY+Math.cos(TargetAngle)*length*metersToPixel);
     }
 
 //Drawing--------------------------------------------------------------------------------------------------------------------------------------------
@@ -169,8 +164,9 @@ public class PIDSimulator extends JPanel {
             super.paintComponent(g);
             Graphics2D g2d = (Graphics2D) g;
 
-            setBackground(new Color(100, 100, 100));
+            setBackground(new Color(100, 100, 100)); //Fill Background with grey
 
+        //Drawing Background Grid Centered on the Pivot
             g.setColor(new Color(255, 255, 255, 30));
             for(int i = -1*75; i <= height-pivotY; i += 75){
                 g.drawLine(0, pivotY+i, width, pivotY+i);
@@ -179,20 +175,36 @@ public class PIDSimulator extends JPanel {
                 g.drawLine(pivotX+i, 0, pivotX+i, height);
             }
 
+        //Drawing Pendulum and Target Line
             g.setColor(new Color(255, 255, 255));
             g.drawLine(pivotX, pivotY, pendulumX, pendulumY);
+            g.setColor(new Color(255, 0, 0, 100));
+            g.drawLine(pivotX, pivotY, TargetX, TargetY);
             g.setColor(new Color(0, 0, 0));
             g.fillOval(pivotX-10/2, pivotY-10/2, 10, 10);
 
             PIDMethods.drawRotatedImage(g2d, pendulum, angle, pendulumX, pendulumY);
 
+        //Drawing Arrows Showing P, I, D
+            PIDMethods.drawArrowOffPendulum(pCommand*10, length/4*metersToPixel, g);
+            PIDMethods.drawRotatedTextOffPendulum(g2d, "P", length/4*metersToPixel);
+            PIDMethods.drawArrowOffPendulum(iCommand*10, length/4*metersToPixel*2, g);
+            PIDMethods.drawRotatedTextOffPendulum(g2d, "I", length/4*metersToPixel*2);
+            PIDMethods.drawArrowOffPendulum(dCommand*10, length/4*metersToPixel*3, g);
+            PIDMethods.drawRotatedTextOffPendulum(g2d, "D", length/4*metersToPixel*3);
+
+        //Drawing Values in the Upper Right
             g.setFont(font);
             g.setColor(new Color(255, 255, 255));
             g.drawString("Angle: " + PIDMethods.round(Math.toDegrees(angle)), width-150, 25);
             g.drawString("Velocity: " + PIDMethods.round(velocity), width-150, 55);
             g.drawString("Accel.: " + PIDMethods.round(acceleration), width-150, 85);
-            g.drawString("Motor: " + PIDMethods.round(motorOut), width-150, 115);
+            g.drawString("P: " + PIDMethods.round(pCommand), width-150, 115);
+            g.drawString("I: " + PIDMethods.round(iCommand), width-150, 145);
+            g.drawString("D: " + PIDMethods.round(dCommand), width-150, 175);
+            g.drawString("Motor: " + PIDMethods.round(motorOut), width-150, 205);
 
+        //Displaying FPS
             try {
                 g.drawString("FPS: " + 1000/(System.currentTimeMillis()-time), 10, height-10);
             } catch (ArithmeticException value) {}
