@@ -15,7 +15,7 @@ public class PIDSimulator extends JPanel {
     static final int height = gd.getDisplayMode().getHeight()-100;
     static final int pivotX = width/2;  
     static final int pivotY = 100;
-    static final double friction = 0.1;   //friction torque of pendulum pivot point (Nm)
+    static final double friction = 0.1;     //friction torque of pendulum pivot point (Nm)
     static final double rotation = Math.PI*2;
     static final double gravity = 9.81;     //gravitational constant (9.81 m/s2)
 
@@ -34,8 +34,8 @@ public class PIDSimulator extends JPanel {
     static double AngleError = 0;
     static double IntError = 0;
     static double PreviousError = 0;
-    static double Tgravity=0;
-    static double Tfriction=0;
+    static double Tgravity = 0;
+    static double Tfriction= 0;
     static boolean stepToggle = false;
 
     static long time = System.currentTimeMillis();
@@ -207,6 +207,8 @@ public class PIDSimulator extends JPanel {
             g.drawLine(pivotX, pivotY, pendulumX, pendulumY);
             g.setColor(new Color(255, 0, 0, 100));
             g.drawLine(pivotX, pivotY, TargetX, TargetY);
+            g.fillOval(TargetX-50, TargetY-50, 100, 100);
+            g.drawOval(TargetX-50, TargetY-50, 100, 100);
             g.setColor(new Color(0, 0, 0));
             g.fillOval(pivotX-10/2, pivotY-10/2, 10, 10);
 
