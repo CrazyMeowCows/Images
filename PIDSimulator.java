@@ -2,7 +2,6 @@
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
-import java.io.IOException;
 
 @SuppressWarnings("serial")
 public class PIDSimulator extends JPanel {
@@ -37,6 +36,7 @@ public class PIDSimulator extends JPanel {
     static double PreviousError = 0;
     static double Tgravity=0;
     static double Tfriction=0;
+    static boolean stepToggle = false;
 
     static long time = System.currentTimeMillis();
 
@@ -62,7 +62,7 @@ public class PIDSimulator extends JPanel {
         PIDMethods.label("D Gain: ", 10, 65);
         PIDMethods.label("Target ∡: ", 10, 95);
         PIDMethods.label("Reset ∡: ", 10, 225);
-        PIDMethods.label("Max Pwr: ", 10, 255);
+        PIDMethods.label("Max Trq: ", 10, 255);
         
         JTextField pText = PIDMethods.text("0", 100, 5);
         JTextField iText = PIDMethods.text("0", 100, 35);
@@ -72,6 +72,9 @@ public class PIDSimulator extends JPanel {
         JTextField maxPwr = PIDMethods.text("" + Math.round(motorMax), 100, 255);
 
         JButton reset = PIDMethods.button("Reset To Start Angle", width/2, 30, 300, 50);
+        JButton pause = PIDMethods.button("Pause", width/4, height-50, 200, 50);
+        JButton start = PIDMethods.button("Start", width/4*2, height-50, 200, 50);
+        JButton step = PIDMethods.button("Step Forward", width/4*3, height-50, 200, 50);
 
         frame.add(panel);
 
@@ -81,6 +84,17 @@ public class PIDSimulator extends JPanel {
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);  
+
+    //Timer------------------------------------------------------------------------------------------------------------------------------------------
+        time = System.currentTimeMillis();
+        Timer timer = new Timer(timeStep, new ActionListener() {
+            public void actionPerformed(ActionEvent evt) {
+                PIDCalc();
+                Physics();
+                frame.repaint();
+            }
+        });
+        timer.start();  
 
     //Action Listeners-------------------------------------------------------------------------------------------------------------------------------
         Action pidInputs = new AbstractAction() {
@@ -103,7 +117,7 @@ public class PIDSimulator extends JPanel {
         TAtext.addActionListener(pidInputs);
         maxPwr.addActionListener(pidInputs);
 
-        Action clicked = new AbstractAction() {
+        Action resetClicked = new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 try {
                     angle = Math.toRadians(Double.parseDouble(rAngle.getText()));
@@ -115,18 +129,31 @@ public class PIDSimulator extends JPanel {
                 }
             }
         };
-        reset.addActionListener(clicked);
+        reset.addActionListener(resetClicked);
 
-    //Timer------------------------------------------------------------------------------------------------------------------------------------------
-        time = System.currentTimeMillis();
-        Timer timer = new Timer(timeStep, new ActionListener() {
-            public void actionPerformed(ActionEvent evt) {
+        Action stopClicked = new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                timer.stop();
+            }
+        };
+        pause.addActionListener(stopClicked);
+
+        Action startClicked = new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                timer.start();
+            }
+        };
+        start.addActionListener(startClicked);
+
+        Action stepClicked = new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                timer.stop();
                 PIDCalc();
                 Physics();
                 frame.repaint();
             }
-        });
-        timer.start();  
+        };
+        step.addActionListener(stepClicked);
     }
 
 //PID Calculation of Motor Torque--------------------------------------------------------------------------------------------------------------------------------------------
@@ -141,7 +168,7 @@ public class PIDSimulator extends JPanel {
         motorOut = pCommand + dCommand + iCommand;          //sum P I and D terms into full command
         motorOut = Math.min(motorMax, motorOut);            //limit motor torque command to 
         motorOut = Math.max(-motorMax, motorOut);           //     the capability of the motor
-        PreviousError=AngleError;                           //Put current angle error into previous error for next cycle
+        PreviousError = AngleError;                           //Put current angle error into previous error for next cycle
 }
 
 //Physics--------------------------------------------------------------------------------------------------------------------------------------------
@@ -171,7 +198,7 @@ public class PIDSimulator extends JPanel {
             for(int i = -1*75; i <= height-pivotY; i += 75){
                 g.drawLine(0, pivotY+i, width, pivotY+i);
             }
-            for(int i = -10*75; i <= width-pivotX; i += 75){
+            for(int i = -15*75; i <= width-pivotX; i += 75){
                 g.drawLine(pivotX+i, 0, pivotX+i, height);
             }
 
