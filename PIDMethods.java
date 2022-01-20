@@ -17,7 +17,7 @@ class PIDMethods{
         JLabel label = new JLabel(name);
         label.setFont(PIDSimulator.font);
         label.setForeground(Color.WHITE);
-        label.setBounds(x, y, 90, 25);
+        label.setBounds(x, y, 150, 25);
 
         PIDSimulator.panel.add(label);
         return label;

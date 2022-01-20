@@ -17,7 +17,7 @@ public class PIDSimulator extends JPanel {
     static final int pivotY = 100;
     static final double friction = 0.1;     //friction torque of pendulum pivot point (Nm)
     static final double rotation = Math.PI*2;
-    static final double gravity = 9.81;     //gravitational constant (9.81 m/s2)
+
 
     static final DrawingManager panel = new DrawingManager();
     static final Font font = new Font("Serif", Font.PLAIN, 20);
@@ -37,6 +37,7 @@ public class PIDSimulator extends JPanel {
     static double Tgravity = 0;
     static double Tfriction= 0;
     static boolean stepToggle = false;
+    static double gravity = 9.81;     //gravitational constant (9.81 m/s2)  
 
     static long time = System.currentTimeMillis();
 
@@ -61,20 +62,24 @@ public class PIDSimulator extends JPanel {
         PIDMethods.label("I Gain: ", 10, 35);
         PIDMethods.label("D Gain: ", 10, 65);
         PIDMethods.label("Target ∡: ", 10, 95);
-        PIDMethods.label("Reset ∡: ", 10, 225);
-        PIDMethods.label("Max Trq: ", 10, 255);
+        PIDMethods.label("Start ∡: ", 10, 225);
+        PIDMethods.label("Motor Limit: ", 10, 255);
+
         
         JTextField pText = PIDMethods.text("0", 100, 5);
         JTextField iText = PIDMethods.text("0", 100, 35);
         JTextField dText = PIDMethods.text("0", 100, 65);
         JTextField TAtext = PIDMethods.text("" + Math.toDegrees(TargetAngle), 100, 95);
-        JTextField rAngle = PIDMethods.text("" + Math.round(Math.toDegrees(angle)), 100, 225);
-        JTextField maxPwr = PIDMethods.text("" + Math.round(motorMax), 100, 255);
+        JTextField rAngle = PIDMethods.text("" + Math.round(Math.toDegrees(angle)), 125, 225);
+        JTextField maxPwr = PIDMethods.text("" + Math.round(motorMax), 125, 255);
+
 
         JButton reset = PIDMethods.button("Reset To Start Angle", width/2, 30, 300, 50);
         JButton pause = PIDMethods.button("Pause", width/4, height-50, 200, 50);
-        JButton start = PIDMethods.button("Start", width/4*2, height-50, 200, 50);
+        JButton start = PIDMethods.button("Play", width/4*2, height-50, 200, 50);
         JButton step = PIDMethods.button("Step Forward", width/4*3, height-50, 200, 50);
+        JButton flip = PIDMethods.button("Flip Target ∡", 100, 150, 150, 30);
+        JButton gravonoff = PIDMethods.button("Gravity on/off", width-125, 275, 150, 30);
 
         frame.add(panel);
 
@@ -131,6 +136,30 @@ public class PIDSimulator extends JPanel {
         };
         reset.addActionListener(resetClicked);
 
+        Action flipClicked = new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    TargetAngle=TargetAngle*-1;
+                } catch (NumberFormatException value) {
+                    System.out.println("Invalid Entry");
+                }
+            }
+        };
+        flip.addActionListener(flipClicked);
+
+        Action gravonoffClicked = new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    if(gravity==0){gravity=9.81;}
+                    else{gravity=0;};
+                } catch (NumberFormatException value) {
+                    System.out.println("Invalid Entry");
+                }
+            }
+        };
+        gravonoff.addActionListener(gravonoffClicked);
+
+
         Action stopClicked = new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 timer.stop();
@@ -161,8 +190,11 @@ public class PIDSimulator extends JPanel {
         AngleError=TargetAngle-angle;                       //calc angle error (target angle-current angle)
         pCommand = pGain * AngleError;                      //calculate Proportional command
         dCommand = dGain * (AngleError - PreviousError)/((double)timeStep/1000);    //calculate Derivative command
-        if(Math.abs(motorOut)<motorMax){IntError=IntError+AngleError;}              //Accumulate the error if motor is not at its max value (anti-windup)
-        iCommand = iGain * IntError;                        //calculate the Integral command
+        //if(Math.abs(motorOut)<motorMax){IntError=IntError+AngleError;}              //Accumulate the error if motor is not at its max value (anti-windup)
+        //if(iGain==0){IntError=0;}                           //zero out the accumulated iCommand if iGain is set to zero (Integral not being used)
+        iCommand = iCommand + AngleError*iGain;
+        if(iGain==0){iCommand=0;}
+        //iCommand = iGain * IntError;                        //calculate the Integral command
         iCommand = Math.min(motorMax, iCommand);            //limit intergral torque command to limit of motor 
         iCommand = Math.max(-motorMax, iCommand);           //      to prevent it from endlessly accumulating
         motorOut = pCommand + dCommand + iCommand;          //sum P I and D terms into full command
@@ -232,6 +264,7 @@ public class PIDSimulator extends JPanel {
             g.drawString("I: " + PIDMethods.round(iCommand), width-150, 145);
             g.drawString("D: " + PIDMethods.round(dCommand), width-150, 175);
             g.drawString("Motor: " + PIDMethods.round(motorOut), width-150, 205);
+            g.drawString("Gravity: "+PIDMethods.round(gravity),width-150,235);
 
         //Displaying FPS
             try {
